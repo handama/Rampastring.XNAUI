@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Rampastring")]
 [assembly: AssemblyProduct("Rampastring.XNAUI")]
-[assembly: AssemblyCopyright("Copyright © Rami 'Rampastring' Pasanen 2016-2022")]
+[assembly: AssemblyCopyright("Copyright © Rami 'Rampastring' Pasanen 2016-2019")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -31,4 +31,5 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("2.1.*")]
+[assembly: AssemblyVersion("2.1")]
+[assembly: AssemblyFileVersion("2.1")]

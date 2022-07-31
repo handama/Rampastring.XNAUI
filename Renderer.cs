@@ -33,8 +33,6 @@ namespace Rampastring.XNAUI
 
         private static Texture2D whitePixelTexture;
 
-        private static ContentManager contentManager;
-
         private static readonly LinkedList<SpriteBatchSettings> settingStack = new LinkedList<SpriteBatchSettings>();
 
         internal static SpriteBatchSettings CurrentSettings;
@@ -43,8 +41,6 @@ namespace Rampastring.XNAUI
         {
             spriteBatch = new SpriteBatch(gd);
             fonts = new List<SpriteFont>();
-
-            contentManager = content;
 
             if (!contentPath.EndsWith("/") && !contentPath.EndsWith("\\"))
                 contentPath += Path.DirectorySeparatorChar;
@@ -67,11 +63,6 @@ namespace Rampastring.XNAUI
 
             whitePixelTexture = AssetLoader.CreateTexture(Color.White, 1, 1);
         }
-
-        /// <summary>
-        /// Allows direct access to the list of loaded fonts.
-        /// </summary>
-        public static List<SpriteFont> GetFontList() => fonts;
 
         /// <summary>
         /// Returns a version of the given string where all characters that don't
@@ -183,7 +174,7 @@ namespace Rampastring.XNAUI
 
         public static void PushRenderTarget(RenderTarget2D renderTarget) => RenderTargetStack.PushRenderTarget(renderTarget);
 
-        public static void PopRenderTarget() => RenderTargetStack.PopRenderTarget();
+        public static void PopRenderTarget(RenderTarget2D renderTarget) => RenderTargetStack.PopRenderTarget();
 
         //BlendState blendState = new BlendState();
         //blendState.AlphaDestinationBlend = Blend.One;
@@ -232,14 +223,6 @@ namespace Rampastring.XNAUI
             spriteBatch.Draw(texture, destinationRectangle, sourceRectangle, color);
         }
 
-        public static void DrawTexture(Texture2D texture, Rectangle sourceRectangle, Vector2 location, float rotation, Vector2 origin, Vector2 scale, Color color)
-        {
-#if !XNA
-            spriteBatch.Draw(texture, location, null, sourceRectangle, origin, rotation, scale, color, SpriteEffects.None, 0f);
-#else
-            spriteBatch.Draw(texture, location, sourceRectangle, color, rotation, origin, scale, SpriteEffects.None, 0f);
-#endif
-        }
 
         public static void DrawTexture(Texture2D texture, Vector2 location, float rotation, Vector2 origin, Vector2 scale, Color color)
         {
@@ -310,22 +293,18 @@ namespace Rampastring.XNAUI
             spriteBatch.DrawString(fonts[fontIndex], text, location, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
         }
 
-        public static void DrawStringWithShadow(string text, int fontIndex, Vector2 location, Color color, float scale = 1.0f, float shadowDistance = 1.0f)
+        public static void DrawStringWithShadow(string text, int fontIndex, Vector2 location, Color color, float scale = 1.0f)
         {
             if (fontIndex >= fonts.Count)
                 throw new Exception("Invalid font index: " + fontIndex);
 
 #if XNA
-            spriteBatch.DrawString(fonts[fontIndex], text,
-                new Vector2(location.X + shadowDistance, location.Y + shadowDistance),
-                new Color(0, 0, 0, color.A));
+            spriteBatch.DrawString(fonts[fontIndex], text, new Vector2(location.X + 1f, location.Y + 1f), new Color(0, 0, 0, color.A));
 #else
             spriteBatch.DrawString(fonts[fontIndex], text,
-                new Vector2(location.X + shadowDistance, location.Y + shadowDistance),
-                UISettings.ActiveSettings.TextShadowColor * (color.A / 255.0f),
+                new Vector2(location.X + 1f, location.Y + 1f), new Color((byte)0, (byte)0, (byte)0, color.A),
                 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
 #endif
-
             spriteBatch.DrawString(fonts[fontIndex], text, location, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
         }
 

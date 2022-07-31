@@ -34,13 +34,11 @@ namespace Rampastring.XNAUI.Input
 
             foreach (Keys key in DownKeys)
             {
-                if (key == Keys.None)
-                    continue; // Work-around a MonoGame bug in OGL mode
-
                 if (KeyboardState.IsKeyUp(key))
                 {
                     DoKeyPress(key);
                     PressedKeys.Add(key);
+                    
                 }
             }
 
@@ -50,16 +48,7 @@ namespace Rampastring.XNAUI.Input
         void DoKeyPress(Keys key)
         {
             if (OnKeyPressed != null)
-            {
-                Delegate[] delegates = OnKeyPressed.GetInvocationList();
-                var args = new KeyPressEventArgs(key);
-                for (int i = 0; i < delegates.Length; i++)
-                {
-                    delegates[i].DynamicInvoke(this, args);
-                    if (args.Handled)
-                        return;
-                }
-            }
+                OnKeyPressed(this, new KeyPressEventArgs(key));
         }
 
         public bool IsKeyHeldDown(Keys key)
@@ -69,17 +58,8 @@ namespace Rampastring.XNAUI.Input
 
         public bool IsCtrlHeldDown()
         {
-            return IsKeyHeldDown(Keys.RightControl) || IsKeyHeldDown(Keys.LeftControl);
-        }
-
-        public bool IsShiftHeldDown()
-        {
-            return IsKeyHeldDown(Keys.RightShift) || IsKeyHeldDown(Keys.LeftShift);
-        }
-
-        public bool IsAltHeldDown()
-        {
-            return IsKeyHeldDown(Keys.RightAlt) || IsKeyHeldDown(Keys.LeftAlt);
+            return IsKeyHeldDown(Keys.RightControl) ||
+                        IsKeyHeldDown(Keys.LeftControl);
         }
     }
 
@@ -91,8 +71,5 @@ namespace Rampastring.XNAUI.Input
         }
 
         public Keys PressedKey { get; set; }
-
-        // If set, the key press event won't be forwarded on to following subscribers.
-        public bool Handled { get; set; }
     }
 }

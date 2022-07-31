@@ -5,16 +5,6 @@ using System.Collections.Generic;
 
 namespace Rampastring.XNAUI.XNAControls
 {
-    public class ContextMenuItemSelectedEventArgs : EventArgs
-    {
-        public ContextMenuItemSelectedEventArgs(int itemIndex)
-        {
-            ItemIndex = itemIndex;
-        }
-
-        public int ItemIndex { get; }
-    }
-
     /// <summary>
     /// A context menu item.
     /// </summary>
@@ -24,12 +14,6 @@ namespace Rampastring.XNAUI.XNAControls
         /// The text of the context menu item.
         /// </summary>
         public string Text { get; set; }
-
-        /// <summary>
-        /// The hint text of the context menu item.
-        /// Drawn in the end of the item.
-        /// </summary>
-        public string HintText { get; set; }
 
         /// <summary>
         /// Determines whether the context menu item is enabled
@@ -101,8 +85,9 @@ namespace Rampastring.XNAUI.XNAControls
     /// </summary>
     public class XNAContextMenu : XNAControl
     {
-        protected const int BORDER_WIDTH = 1;
-        protected const int TEXTURE_PADDING = 1;
+        private const int BORDER_WIDTH = 1;
+        private const int TEXTURE_PADDING = 1;
+        private const int TEXT_PADDING = 1;
 
         /// <summary>
         /// Creates a new context menu.
@@ -115,8 +100,6 @@ namespace Rampastring.XNAUI.XNAControls
             Disable();
         }
 
-        public event EventHandler<ContextMenuItemSelectedEventArgs> OptionSelected;
-
         public int ItemHeight { get; set; } = 17;
 
         public List<XNAContextMenuItem> Items = new List<XNAContextMenuItem>();
@@ -125,56 +108,62 @@ namespace Rampastring.XNAUI.XNAControls
 
         public Color BorderColor
         {
-            get => _borderColor ?? UISettings.ActiveSettings.PanelBorderColor;
-            set => _borderColor = value;
+            get
+            {
+                return _borderColor ?? UISettings.ActiveSettings.PanelBorderColor;
+            }
+            set { _borderColor = value; }
         }
 
         private Color? _focusColor;
 
         public Color FocusColor
         {
-            get => _focusColor ?? UISettings.ActiveSettings.FocusColor;
-            set => _focusColor = value;
+            get
+            {
+                return _focusColor ?? UISettings.ActiveSettings.FocusColor;
+            }
+            set { _focusColor = value; }
         }
 
         private Color? _backColor;
 
         public Color BackColor
         {
-            get => _backColor ?? UISettings.ActiveSettings.BackgroundColor;
-            set => _backColor = value;
+            get
+            {
+                return _backColor ?? UISettings.ActiveSettings.BackgroundColor;
+            }
+            set { _backColor = value; }
         }
 
         private Color? _itemColor;
 
         public Color ItemColor
         {
-            get => _itemColor ?? UISettings.ActiveSettings.AltColor;
-            set => _itemColor = value;
+            get
+            {
+                return _itemColor ?? UISettings.ActiveSettings.AltColor;
+            }
+            set { _itemColor = value; }
         }
 
         private Color? _disabledItemColor;
 
         public Color DisabledItemColor
         {
-            get => _disabledItemColor ?? UISettings.ActiveSettings.DisabledItemColor;
-            set => _disabledItemColor = value;
+            get
+            {
+                return _disabledItemColor ?? UISettings.ActiveSettings.DisabledItemColor;
+            }
+            set { _disabledItemColor = value; }
         }
 
         public int FontIndex { get; set; }
-        public int HintFontIndex { get; set; }
 
-        public int TextHorizontalPadding { get; set; } = 1;
-        public int TextVerticalPadding { get; set; } = 1;
+        int hoveredIndex = -1;
 
-        /// <summary>
-        /// The index of the context menu item that 
-        /// the user's cursor is hovering on. -1 for none.
-        /// </summary>
-        public int HoveredIndex { get; private set; } = -1;
-
-        private bool leftClickHandled = false;
-        private bool openedOnThisFrame = false;
+        bool leftClickHandled = false;
 
         #region AddItem methods
 
@@ -199,7 +188,7 @@ namespace Rampastring.XNAUI.XNAControls
             AddItem(item);
         }
 
-        public void AddItem(string text, Action selectAction, Func<bool> selectableChecker = null, Func<bool> visibilityChecker = null, Texture2D texture = null, string hintText = null)
+        public void AddItem(string text, Action selectAction, Func<bool> selectableChecker = null, Func<bool> visibilityChecker = null, Texture2D texture = null)
         {
             var item = new XNAContextMenuItem()
             {
@@ -207,8 +196,7 @@ namespace Rampastring.XNAUI.XNAControls
                 SelectAction = selectAction,
                 SelectableChecker = selectableChecker,
                 VisibilityChecker = visibilityChecker,
-                Texture = texture,
-                HintText = hintText
+                Texture = texture
             };
 
             AddItem(item);
@@ -258,8 +246,6 @@ namespace Rampastring.XNAUI.XNAControls
 
             if (windowPoint.Y + Height > WindowManager.RenderResolutionY)
                 Y -= Height;
-
-            openedOnThisFrame = true;
         }
 
         public void ClearItems()
@@ -274,20 +260,19 @@ namespace Rampastring.XNAUI.XNAControls
 
             // Hide the drop-down if the left mouse button is clicked while the
             // cursor isn't on this control
-            if (Cursor.LeftClicked && !leftClickHandled && !openedOnThisFrame)
+            if (Cursor.LeftClicked && !leftClickHandled)
                 OnLeftClick();
 
             leftClickHandled = false;
-            openedOnThisFrame = false;
 
             // Update hovered index
 
             int itemIndexOnCursor = GetItemIndexOnCursor();
 
             if (itemIndexOnCursor > -1 && Items[itemIndexOnCursor].Selectable)
-                HoveredIndex = itemIndexOnCursor;
+                hoveredIndex = itemIndexOnCursor;
             else
-                HoveredIndex = -1;
+                hoveredIndex = -1;
         }
 
         public override void OnLeftClick()
@@ -303,8 +288,6 @@ namespace Rampastring.XNAUI.XNAControls
                 if (Items[itemIndexOnCursor].Selectable)
                 {
                     Items[itemIndexOnCursor].SelectAction?.Invoke();
-                    OptionSelected?.Invoke(this, new ContextMenuItemSelectedEventArgs(itemIndexOnCursor));
-
                     if (Detached)
                         Attach();
                     Disable();
@@ -400,14 +383,14 @@ namespace Rampastring.XNAUI.XNAControls
 
             int itemHeight = GetItemHeight(item);
 
-            if (HoveredIndex == index)
+            if (hoveredIndex == index)
             {
                 FillRectangle(new Rectangle(point.X, point.Y, Width - BORDER_WIDTH * 2, itemHeight), FocusColor);
             }
             else
                 FillRectangle(new Rectangle(point.X, point.Y, Width - BORDER_WIDTH * 2, itemHeight), BackColor);
 
-            int textX = point.X + TextHorizontalPadding;
+            int textX = point.X + TEXT_PADDING;
             if (item.Texture != null)
             {
                 Renderer.DrawTexture(item.Texture, new Rectangle(point.X + TEXTURE_PADDING, point.Y + TEXTURE_PADDING,
@@ -417,12 +400,7 @@ namespace Rampastring.XNAUI.XNAControls
 
             Color textColor = item.Selectable ? GetItemTextColor(item) : DisabledItemColor;
 
-            DrawStringWithShadow(item.Text, FontIndex, new Vector2(textX, point.Y + TextVerticalPadding), textColor);
-            if (item.HintText != null)
-            {
-                int hintTextX = Width - TextHorizontalPadding - (int)Renderer.GetTextDimensions(item.HintText, HintFontIndex).X;
-                DrawStringWithShadow(item.HintText, HintFontIndex, new Vector2(hintTextX, point.Y + TextVerticalPadding), textColor);
-            }
+            DrawStringWithShadow(item.Text, FontIndex, new Vector2(textX, point.Y + TEXT_PADDING), textColor);
 
             return itemHeight;
         }

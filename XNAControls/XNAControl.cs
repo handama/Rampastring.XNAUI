@@ -59,10 +59,8 @@ namespace Rampastring.XNAUI.XNAControls
         /// </summary>
         public event EventHandler MouseMove;
 
-        /// <summary>
-        /// Raised each frame when the mouse cursor is inside the control's area.
-        /// </summary>
-        public event EventHandler MouseOnControl;
+        public delegate void MouseOnControlEventHandler(object sender, MouseEventArgs e);
+        public event MouseOnControlEventHandler MouseOnControl;
 
         /// <summary>
         /// Raised when the scroll wheel is used while the cursor is inside
@@ -184,11 +182,9 @@ namespace Rampastring.XNAUI.XNAControls
         #region Location and size
 
         private int _x, _y, _width, _height;
-        private int _scaling = 1;
-        private int _initScaling;
 
         /// <summary>
-        /// The non-scaled display rectangle of the control inside its parent.
+        /// The display rectangle of the control inside its parent.
         /// </summary>
         public Rectangle ClientRectangle
         {
@@ -200,26 +196,10 @@ namespace Rampastring.XNAUI.XNAControls
             {
                 _x = value.X;
                 _y = value.Y;
-                bool isSizeChanged = value.Width != _width || value.Height != _height;
-                if (isSizeChanged)
-                {
-                    _width = value.Width;
-                    _height = value.Height;
-                    OnSizeChanged();
-                }
+                _width = value.Width;
+                _height = value.Height;
 
                 OnClientRectangleUpdated();
-            }
-        }
-
-        /// <summary>
-        /// Called when the control's size is changed.
-        /// </summary>
-        protected virtual void OnSizeChanged()
-        {
-            if (!IsChangingSize && Initialized && DrawMode == ControlDrawMode.UNIQUE_RENDER_TARGET)
-            {
-                RefreshRenderTarget();
             }
         }
 
@@ -228,6 +208,11 @@ namespace Rampastring.XNAUI.XNAControls
         /// </summary>
         protected virtual void OnClientRectangleUpdated()
         {
+            if (!IsChangingSize && Initialized && DrawMode == ControlDrawMode.UNIQUE_RENDER_TARGET)
+            {
+                CreateRenderTarget();
+            }
+
             ClientRectangleUpdated?.Invoke(this, EventArgs.Empty);
         }
 
@@ -236,9 +221,9 @@ namespace Rampastring.XNAUI.XNAControls
             if (DrawMode != ControlDrawMode.UNIQUE_RENDER_TARGET)
                 return;
 
-            if (RenderTarget == null || RenderTarget.Width != Width || RenderTarget.Height != Height)
+            if (renderTarget == null || renderTarget.Width != Width || renderTarget.Height != Height)
             {
-                RefreshRenderTarget();
+                CreateRenderTarget();
             }
 
             _children.ForEach(c => c.CheckForRenderAreaChange());
@@ -279,12 +264,9 @@ namespace Rampastring.XNAUI.XNAControls
             set
             {
                 _width = value;
-                OnSizeChanged();
                 OnClientRectangleUpdated();
             }
         }
-
-        public int ScaledWidth => Width * Scaling;
 
         /// <summary>
         /// The height of the control.
@@ -295,12 +277,9 @@ namespace Rampastring.XNAUI.XNAControls
             set
             {
                 _height = value;
-                OnSizeChanged();
                 OnClientRectangleUpdated();
             }
         }
-
-        public int ScaledHeight => Height * Scaling;
 
         /// <summary>
         /// Shortcut for accessing ClientRectangle.Bottom.
@@ -323,15 +302,6 @@ namespace Rampastring.XNAUI.XNAControls
         public string Name { get; set; }
         public Color RemapColor { get; set; } = Color.White;
 
-        /// <summary>
-        /// Determines whether this control should exclusively capture input when it's the selected control,
-        /// preventing any other control from being the input focus. An example is scroll bars; when the user
-        /// starts dragging a scroll bar, no other control should get focus as long as the scroll bar is being scrolled,
-        /// even if the cursor left the scroll bar's area.
-        /// NOTE: controls using this should give up their selected control status when they've figured out they don't need it anymore.
-        /// </summary>
-        public bool ExclusiveInputCapture { get; protected set; } = false;
-
         bool CursorOnControl = false;
 
         float alpha = 1.0f;
@@ -339,6 +309,9 @@ namespace Rampastring.XNAUI.XNAControls
         {
             get
             {
+                if (Parent != null)
+                    return alpha * Parent.Alpha;
+
                 return alpha;
             }
             set
@@ -446,39 +419,6 @@ namespace Rampastring.XNAUI.XNAControls
             }
         }
 
-        public int Scaling
-        {
-            get => _scaling;
-            set
-            {
-                if (DrawMode != ControlDrawMode.UNIQUE_RENDER_TARGET)
-                {
-                    throw new InvalidOperationException("Scaling cannot be " +
-                        "used when the control has no unique render target.");
-                }
-
-                if (Initialized && value < _initScaling)
-                {
-                    throw new InvalidOperationException("Scaling cannot be " +
-                        "lowered below the initial scaling multiplier after control initialization.");
-                }
-
-                if (value < 1)
-                {
-                    throw new InvalidOperationException("Scale factor cannot be below one.");
-                }
-
-                _scaling = value;
-            }
-        }
-
-        /// <summary>
-        /// Whether this control should allow input to pass through to controls
-        /// that come after this in the control hierarchy when the control
-        /// itself is the focus of input, but none of its children are.
-        /// Useful for controls that act as composite for other controls.
-        /// </summary>
-        public bool InputPassthrough { get; protected set; } = false;
 
         #endregion
 
@@ -488,23 +428,7 @@ namespace Rampastring.XNAUI.XNAControls
 
         private bool isIteratingChildren = false;
 
-        /// <summary>
-        /// Whether a child of this control handled input during the ongoing frame.
-        /// Used for input pass-through.
-        /// </summary>
-        internal bool ChildHandledInput = false;
-
-        /// <summary>
-        /// Gets a value that can be used to check whether a child of this control is active on the current frame.
-        /// See <see cref="IsActive"/>.
-        /// </summary>
-        public bool IsChildActive { get; private set; }
-
-        /// <summary>
-        /// The render target of the control
-        /// in unique render target mode.
-        /// </summary>
-        protected RenderTarget2D RenderTarget { get; set; }
+        private RenderTarget2D renderTarget;
 
         /// <summary>
         /// Determines whether the control's <see cref="Initialize"/> method
@@ -532,6 +456,33 @@ namespace Rampastring.XNAUI.XNAControls
             return func(this) && (Parent == null || Parent.AppliesToSelfAndAllParents(func));
         }
 
+        public virtual Color GetColorWithAlpha(Color baseColor)
+        {
+            return new Color(baseColor.R, baseColor.G, baseColor.B, (int)(Alpha * 255));
+        }
+        public Rectangle WindowRectangle()
+        {
+            return new Rectangle(this.GetLocationX(), this.GetLocationY(), this.Width, this.Height);
+        }
+        public int GetLocationX()
+        {
+            if (this.Parent != null)
+            {
+                return this.X + this.Parent.GetLocationX();
+            }
+            return this.X;
+        }
+
+        // Token: 0x0600024A RID: 586 RVA: 0x000088E6 File Offset: 0x00006AE6
+        public int GetLocationY()
+        {
+            if (this.Parent != null)
+            {
+                return this.Y + this.Parent.GetLocationY();
+            }
+            return this.Y;
+        }
+
         /// <summary>
         /// Gets the cursor's location relative to this control's location.
         /// </summary>
@@ -539,8 +490,7 @@ namespace Rampastring.XNAUI.XNAControls
         public Point GetCursorPoint()
         {
             Point windowPoint = GetWindowPoint();
-            int totalScaling = GetTotalScalingRecursive();
-            return new Point((Cursor.Location.X - windowPoint.X) / totalScaling, (Cursor.Location.Y - windowPoint.Y) / totalScaling);
+            return new Point(Cursor.Location.X - windowPoint.X, Cursor.Location.Y - windowPoint.Y);
         }
 
         /// <summary>
@@ -552,17 +502,11 @@ namespace Rampastring.XNAUI.XNAControls
             Point p = new Point(X, Y);
 
             if (Parent != null)
-            {
-                int parentTotalScaling = Parent.GetTotalScalingRecursive();
-                p = new Point(p.X * parentTotalScaling, p.Y * parentTotalScaling);
-
 #if XNA
                 return SumPoints(p, parent.GetWindowPoint());
 #else
                 return p + parent.GetWindowPoint();
 #endif
-            }
-
 
             return p;
         }
@@ -575,29 +519,15 @@ namespace Rampastring.XNAUI.XNAControls
         }
 #endif
 
-        public Point GetSizePoint()
-        {
-            int totalScaling = GetTotalScalingRecursive();
-            return new Point(Width * totalScaling, Height * totalScaling);
-        }
-
-        public int GetTotalScalingRecursive()
-        {
-            if (Parent != null)
-                return Scaling * Parent.GetTotalScalingRecursive();
-
-            return Scaling;
-        }
-
         /// <summary>
         /// Gets the control's client area within the game window.
         /// Use for input handling; for rendering, use <see cref="RenderRectangle"/> instead.
         /// </summary>
+        /// <returns></returns>
         public Rectangle GetWindowRectangle()
         {
             Point p = GetWindowPoint();
-            Point size = GetSizePoint();
-            return new Rectangle(p.X, p.Y, size.X, size.Y);
+            return new Rectangle(p.X, p.Y, Width, Height);
         }
 
         /// <summary>
@@ -644,8 +574,8 @@ namespace Rampastring.XNAUI.XNAControls
                 return;
             }
 
-            ClientRectangle = new Rectangle((Parent.Width - ScaledWidth) / 2,
-                (Parent.Height - ScaledHeight) / 2, Width, Height);
+            ClientRectangle = new Rectangle((Parent.Width - Width) / 2,
+                (Parent.Height - Height) / 2, Width, Height);
         }
 
         /// <summary>
@@ -659,7 +589,7 @@ namespace Rampastring.XNAUI.XNAControls
                 return;
             }
 
-            ClientRectangle = new Rectangle((Parent.Width - ScaledWidth) / 2,
+            ClientRectangle = new Rectangle((Parent.Width - Width) / 2,
                 Y, Width, Height);
         }
 
@@ -789,7 +719,7 @@ namespace Rampastring.XNAUI.XNAControls
         private void InitChild(XNAControl child)
         {
             if (child.Parent != null)
-                throw new InvalidOperationException("Child controls cannot be shared between controls. Child control name: " + child.Name);
+                throw new InvalidOperationException("Child controls cannot be shared between controls.");
 
             child.Parent = this;
             child.UpdateOrderChanged += Child_UpdateOrderChanged;
@@ -853,53 +783,17 @@ namespace Rampastring.XNAUI.XNAControls
             base.Initialize();
 
             Initialized = true;
-            _initScaling = _scaling;
+
+            if (DrawMode == ControlDrawMode.UNIQUE_RENDER_TARGET)
+                CreateRenderTarget();
         }
 
-        protected override void OnVisibleChanged(object sender, EventArgs args)
+        private void CreateRenderTarget()
         {
-            if (Visible)
-            {
-                if (DrawMode == ControlDrawMode.UNIQUE_RENDER_TARGET && RenderTarget == null)
-                    RenderTarget = GetRenderTarget();
-            }
-            else
-            {
-                if (DrawMode == ControlDrawMode.UNIQUE_RENDER_TARGET && RenderTarget != null && FreeRenderTarget())
-                    RenderTarget = null;
-            }
+            if (renderTarget != null && !renderTarget.IsDisposed)
+                renderTarget.Dispose();
 
-            base.OnVisibleChanged(sender, args);
-        }
-
-        /// <summary>
-        /// Called for a control with an unique render target when its Visible= is set to false.
-        /// Can be used to free up the render target in derived classes.
-        /// Returns true if the render target should be cleared after this call, false otherwise.
-        /// </summary>
-        protected virtual bool FreeRenderTarget()
-        {
-            return false;
-        }
-
-        private void RefreshRenderTarget()
-        {
-            if (RenderTarget != null)
-            {
-                if (!FreeRenderTarget())
-                {
-                    RenderTarget.Dispose();
-                }
-            }
-
-            RenderTarget = GetRenderTarget();
-            if (RenderTarget == null)
-                throw new InvalidOperationException("GetRenderTarget did not return a render target.");
-        }
-
-        protected virtual RenderTarget2D GetRenderTarget()
-        {
-            return new RenderTarget2D(GraphicsDevice,
+            renderTarget = new RenderTarget2D(GraphicsDevice,
                 GetRenderTargetWidth(), GetRenderTargetHeight(), false,
                 SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
         }
@@ -1082,8 +976,6 @@ namespace Rampastring.XNAUI.XNAControls
 
             XNAControl activeChild = null;
 
-            bool isInputCaptured = WindowManager.IsInputExclusivelyCaptured && WindowManager.SelectedControl != this;
-
             if (Cursor.IsOnScreen && IsActive && rectangle.Contains(Cursor.Location))
             {
                 if (!CursorOnControl)
@@ -1114,58 +1006,50 @@ namespace Rampastring.XNAUI.XNAControls
 
                 Cursor.TextureIndex = CursorTextureIndex;
 
-                bool handleClick = false;
+                MouseEventArgs mouseEventArgs = new MouseEventArgs(
+                    new Point(Cursor.Location.X - rectangle.Location.X,
+                    Cursor.Location.Y - rectangle.Location.Y));
 
-                if (!isInputCaptured)
-                {
-                    OnMouseOnControl();
+                OnMouseOnControl(mouseEventArgs);
 
-                    if (Cursor.HasMoved)
-                        OnMouseMove();
-
-                    handleClick = activeChild == null;
-                }
+                if (Cursor.HasMoved)
+                    OnMouseMove();
 
                 if (!isLeftPressedOn && Cursor.LeftPressedDown)
                 {
                     isLeftPressedOn = true;
-
-                    if (!isInputCaptured)
-                        OnMouseLeftDown();
-                }
-                else if (isLeftPressedOn && Cursor.LeftClicked)
-                {
-                    if (handleClick)
-                        OnLeftClick();
-
-                    isLeftPressedOn = false;
+                    OnMouseLeftDown();
                 }
 
                 if (!isRightPressedOn && Cursor.RightPressedDown)
                 {
                     isRightPressedOn = true;
-
-                    if (!isInputCaptured)
-                        OnMouseRightDown();
+                    OnMouseRightDown();
                 }
-                else if (isRightPressedOn && Cursor.RightClicked)
-                {
-                    if (handleClick)
-                        OnRightClick();
 
-                    isRightPressedOn = false;
+                if (activeChild == null)
+                {
+                    if (isLeftPressedOn && Cursor.LeftClicked)
+                    {
+                        OnLeftClick();
+                        isLeftPressedOn = false;
+                    }
+
+                    if (isRightPressedOn && Cursor.RightClicked)
+                    {
+                        OnRightClick();
+                        isRightPressedOn = false;
+                    }
                 }
 
                 if (Cursor.ScrollWheelValue != 0)
                 {
-                    if (!isInputCaptured)
-                        OnMouseScrolled();
+                    OnMouseScrolled();
                 }
             }
             else if (CursorOnControl)
             {
-                if (!isInputCaptured)
-                    OnMouseLeave();
+                OnMouseLeave();
 
                 CursorOnControl = false;
                 isRightPressedOn = false;
@@ -1207,9 +1091,6 @@ namespace Rampastring.XNAUI.XNAControls
                 RemoveChildImmediate(child);
 
             childRemoveQueue.Clear();
-
-            ChildHandledInput = activeChild != null;
-            IsChildActive = activeChild != null;
         }
 
         /// <summary>
@@ -1223,87 +1104,20 @@ namespace Rampastring.XNAUI.XNAControls
 
             if (DrawMode == ControlDrawMode.UNIQUE_RENDER_TARGET)
             {
-                DrawInternal_UniqueRenderTarget(gameTime);
+                drawPoint = Point.Zero;
+                RenderTargetStack.PushRenderTarget(renderTarget);
+                GraphicsDevice.Clear(Color.Transparent);
+                Draw(gameTime);
+                RenderTargetStack.PopRenderTarget();
+                Rectangle rect = RenderRectangle();
+                Renderer.DrawTexture(renderTarget, new Rectangle(rect.X, rect.Y, 
+                    renderTarget.Width, renderTarget.Height), Color.White * Alpha);
             }
             else
             {
                 drawPoint = GetRenderPoint();
-
-                if (Detached)
-                {
-                    DrawInternal_Detached(gameTime);
-                }
-                else
-                {
-                    Draw(gameTime);
-                }
-            }
-        }
-
-        private void DrawInternal_UniqueRenderTarget(GameTime gameTime)
-        {
-            if (RenderTarget == null)
-                RefreshRenderTarget();
-
-            drawPoint = Point.Zero;
-            RenderTargetStack.PushRenderTarget(RenderTarget);
-            GraphicsDevice.Clear(Color.Transparent);
-            Draw(gameTime);
-            RenderTargetStack.PopRenderTarget();
-            Rectangle rect = RenderRectangle();
-            if (Scaling > 1 && Renderer.CurrentSettings.SamplerState != SamplerState.PointClamp)
-            {
-                Renderer.PushSettings(new SpriteBatchSettings(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp));
-                DrawUniqueRenderTarget(rect);
-                Renderer.PopSettings();
-            }
-            else
-            {
-                DrawUniqueRenderTarget(rect);
-            }
-        }
-
-        /// <summary>
-        /// Draws the control when it is detached from its parent.
-        /// </summary>
-        private void DrawInternal_Detached(GameTime gameTime)
-        {
-            int totalScaling = GetTotalScalingRecursive();
-            if (totalScaling > 1)
-            {
-                // We have to use an unique render target for scaling
-                RenderTargetStack.PushRenderTarget(RenderTargetStack.DetachedScaledControlRenderTarget);
                 Draw(gameTime);
-                RenderTargetStack.PopRenderTarget();
-                Rectangle renderRectangle = RenderRectangle();
-                if (Renderer.CurrentSettings.SamplerState != SamplerState.PointClamp)
-                {
-                    Renderer.PushSettings(new SpriteBatchSettings(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp));
-                    DrawDetachedScaledTexture(renderRectangle, totalScaling);
-                    Renderer.PopSettings();
-                }
-                else
-                {
-                    DrawDetachedScaledTexture(renderRectangle, totalScaling);
-                }
-
-                return;
             }
-
-            Draw(gameTime);
-        }
-
-        private void DrawUniqueRenderTarget(Rectangle renderRectangle)
-        {
-            Renderer.DrawTexture(RenderTarget, new Rectangle(0, 0, Width, Height),
-                new Rectangle(renderRectangle.X, renderRectangle.Y, ScaledWidth, ScaledHeight), Color.White * Alpha);
-        }
-
-        private void DrawDetachedScaledTexture(Rectangle renderRectangle, int totalScaling)
-        {
-            Renderer.DrawTexture(RenderTargetStack.DetachedScaledControlRenderTarget,
-            renderRectangle,
-            new Rectangle(renderRectangle.X, renderRectangle.Y, Width * totalScaling, Height * totalScaling), Color.White * Alpha);
         }
 
         /// <summary>
@@ -1333,7 +1147,7 @@ namespace Rampastring.XNAUI.XNAControls
 
 #region Draw helpers
 
-        private Point drawPoint;
+        Point drawPoint;
 
         /// <summary>
         /// Draws a texture relative to the control's location.
@@ -1394,16 +1208,10 @@ namespace Rampastring.XNAUI.XNAControls
         /// <summary>
         /// Draws a string with a shadow, relative to the control's location.
         /// </summary>
-        /// <param name="text">The string to draw.</param>
-        /// <param name="fontIndex">The index of the font to use for drawing the string.</param>
-        /// <param name="location">The location of the text to draw, relative to the control's location.</param>
-        /// <param name="color">The color of the text.</param>
-        /// <param name="scale">The scale of the text.</param>
-        /// <param name="shadowDistance">How many distance units (typically pixels) the text shadow is offset from the text.</param>
-        public void DrawStringWithShadow(string text, int fontIndex, Vector2 location, Color color, float scale = 1.0f, float shadowDistance = 1.0f)
+        public void DrawStringWithShadow(string text, int fontIndex, Vector2 location, Color color, float scale = 1.0f)
         {
             Renderer.DrawStringWithShadow(text, fontIndex, 
-                new Vector2(location.X + drawPoint.X, location.Y + drawPoint.Y), color, scale, shadowDistance);
+                new Vector2(location.X + drawPoint.X, location.Y + drawPoint.Y), color, scale);
         }
 
         /// <summary>
@@ -1537,9 +1345,10 @@ namespace Rampastring.XNAUI.XNAControls
         /// Called on each frame while the mouse is on the control's
         /// client rectangle.
         /// </summary>
-        public virtual void OnMouseOnControl()
+        /// <param name="eventArgs">Mouse event arguments.</param>
+        public virtual void OnMouseOnControl(MouseEventArgs eventArgs)
         {
-            MouseOnControl?.Invoke(this, EventArgs.Empty);
+            MouseOnControl?.Invoke(this, eventArgs);
         }
 
         /// <summary>

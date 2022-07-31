@@ -73,8 +73,6 @@ namespace Rampastring.XNAUI
         /// </summary>
         public float RepeatPrevention { get; set; }
 
-        public float Volume { get; set; } = 1.0f;
-
         /// <summary>
         /// Plays this sound if it's enabled.
         /// </summary>
@@ -93,7 +91,7 @@ namespace Rampastring.XNAUI
                 lastPlayTime = dtn;
             }
 
-            SoundPlayer.PlayWithVolume(Volume, this);
+            SoundPlayer.Play(this);
         }
 
         internal SoundEffectInstance CreateSoundInstance()
