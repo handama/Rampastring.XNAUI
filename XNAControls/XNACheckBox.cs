@@ -1,5 +1,4 @@
 ﻿using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Graphics;
 using Rampastring.Tools;
 using System;
@@ -156,6 +155,9 @@ namespace Rampastring.XNAUI.XNAControls
                 case "FontIndex":
                     FontIndex = Conversions.IntFromString(value, 0);
                     return;
+                case "IdleColor":
+                    IdleColor = AssetLoader.GetColorFromString(value);
+                    return;
                 case "HighlightColor":
                     HighlightColor = AssetLoader.GetColorFromString(value);
                     return;
@@ -282,7 +284,7 @@ namespace Rampastring.XNAUI.XNAControls
 
                 DrawStringWithShadow(Text, FontIndex,
                     new Vector2(checkedTexture.Width + TextPadding, textYPosition),
-                    textColor);
+                    textColor, 1.0f, UISettings.ActiveSettings.TextShadowDistance);
             }
 
             // Might not be worth it to save one draw-call per frame with a confusing

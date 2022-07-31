@@ -1,10 +1,10 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using Rampastring.Tools;
 using Rampastring.XNAUI.Input;
 using System;
 using System.Text;
 using System.Text.RegularExpressions;
-using IMEHelper;
 
 namespace Rampastring.XNAUI.XNAControls
 {
@@ -165,38 +165,68 @@ namespace Rampastring.XNAUI.XNAControls
         /// </summary>
         public int TextEndPosition { get; set; }
 
+        // TODO PreviousControl and NextControl should be implemented at XNAControl level,
+        // but we currently lack a generic way to handle input in a selected control
+        // (without having all controls subscribe to Keyboard.OnKeyPressed, which could
+        // have bad effects on performance)
+
+        /// <summary>
+        /// The control to switch selection state to when
+        /// the user presses Tab while holding Shift.
+        /// See also <see cref="NextControl"/>.
+        /// </summary>
+        public XNAControl PreviousControl { get; set; }
+
+        /// <summary>
+        /// The control to switch selection state to when
+        /// the user presses Tab without holding Shift.
+        /// See also <see cref="PreviousControl"/>.
+        /// </summary>
+        public XNAControl NextControl { get; set; }
+
         protected TimeSpan barTimer = TimeSpan.Zero;
 
         private TimeSpan scrollKeyTime = TimeSpan.Zero;
         private TimeSpan timeSinceLastScroll = TimeSpan.Zero;
         private bool isScrollingQuickly = false;
 
+        public override void ParseAttributeFromINI(IniFile iniFile, string key, string value)
+        {
+            if (key == nameof(MaximumTextLength))
+            {
+                MaximumTextLength = Conversions.IntFromString(value, MaximumTextLength);
+                return;
+            }
+
+            base.ParseAttributeFromINI(iniFile, key, value);
+        }
+
         /// <summary>
         /// Initializes the text box.
         /// </summary>
-		public override void Initialize()
+        public override void Initialize()
         {
             base.Initialize();
-            base.WindowManager.IMEHandler.TextInput += this.IME_TextInput;
-            base.WindowManager.IMEHandler.TextComposition += this.IME_TextComposition;
 
-            base.Keyboard.OnKeyPressed += this.Keyboard_OnKeyPressed;
-        }
-        private void IME_TextInput(object sender, IMEHelper.TextInputEventArgs e)
-        {
-            this.HandleCharInput(e.Character);
+#if !XNA
+            Game.Window.TextInput += Window_TextInput;
+#else
+            KeyboardEventInput.CharEntered += KeyboardEventInput_CharEntered;
+#endif
+            Keyboard.OnKeyPressed += Keyboard_OnKeyPressed;
         }
 
-        // Token: 0x06000160 RID: 352 RVA: 0x00005364 File Offset: 0x00003564
-        private void IME_TextComposition(object sender, TextCompositionEventArgs e)
+#if XNA
+        private void KeyboardEventInput_CharEntered(object sender, KeyboardEventArgs e)
         {
-            if (base.WindowManager.SelectedControl != this || !base.Enabled || !base.Parent.Enabled || !base.WindowManager.HasFocus)
-            {
-                return;
-            }
-            System.Drawing.Rectangle rectangle = new System.Drawing.Rectangle(base.WindowRectangle().X, base.WindowRectangle().Y, 0, 0);
-            base.WindowManager.IMEHandler.SetTextInputRect(ref rectangle);
+            HandleCharInput(e.Character);
         }
+#else
+        private void Window_TextInput(object sender, TextInputEventArgs e)
+        {
+            HandleCharInput(e.Character);
+        }
+#endif
 
         private void HandleCharInput(char character)
         {
@@ -242,6 +272,7 @@ namespace Rampastring.XNAUI.XNAControls
                         }
                     }
 
+                    TextChanged?.Invoke(this, EventArgs.Empty);
                     break;
             }
 
@@ -265,45 +296,46 @@ namespace Rampastring.XNAUI.XNAControls
             if (WindowManager.SelectedControl != this || !Enabled || !Parent.Enabled || !WindowManager.HasFocus)
                 return;
 
-            HandleKeyPress(e.PressedKey);
+            e.Handled = HandleKeyPress(e.PressedKey);
         }
 
         /// <summary>
         /// Handles a key press while the text box is the selected control.
         /// Can be overridden in derived classes to handle additional key presses.
+        /// Returns true if the key was handled.
         /// </summary>
         /// <param name="key">The key that was pressed.</param>
-        protected virtual void HandleKeyPress(Keys key)
+        protected virtual bool HandleKeyPress(Keys key)
         {
             switch (key)
             {
                 case Keys.Home:
-                    if (text.Length == 0)
-                        return;
-
-                    TextStartPosition = 0;
-                    TextEndPosition = 0;
-                    InputPosition = 0;
-
-                    while (true)
+                    if (text.Length != 0)
                     {
-                        if (TextEndPosition < text.Length)
-                        {
-                            TextEndPosition++;
+                        TextStartPosition = 0;
+                        TextEndPosition = 0;
+                        InputPosition = 0;
 
-                            if (!TextFitsBox())
+                        while (true)
+                        {
+                            if (TextEndPosition < text.Length)
                             {
-                                TextEndPosition--;
-                                break;
+                                TextEndPosition++;
+
+                                if (!TextFitsBox())
+                                {
+                                    TextEndPosition--;
+                                    break;
+                                }
+
+                                continue;
                             }
 
-                            continue;
+                            break;
                         }
-
-                        break;
                     }
 
-                    break;
+                    return true;
                 case Keys.End:
                     TextEndPosition = text.Length;
                     InputPosition = text.Length;
@@ -320,7 +352,7 @@ namespace Rampastring.XNAUI.XNAControls
                         break;
                     }
 
-                    break;
+                    return true;
                 case Keys.X:
                     if (!Keyboard.IsCtrlHeldDown())
                         break;
@@ -332,7 +364,7 @@ namespace Rampastring.XNAUI.XNAControls
                         InputReceived?.Invoke(this, EventArgs.Empty);
                     }
 
-                    break;
+                    return true;
                 case Keys.V:
                     if (!Keyboard.IsCtrlHeldDown())
                         break;
@@ -351,16 +383,30 @@ namespace Rampastring.XNAUI.XNAControls
                     if (!string.IsNullOrEmpty(text))
                         System.Windows.Forms.Clipboard.SetText(text);
 
-                    break;
+                    return true;
                 case Keys.Enter:
                     EnterPressed?.Invoke(this, EventArgs.Empty);
-                    break;
+                    return true;
                 case Keys.Escape:
                     InputPosition = 0;
                     Text = string.Empty;
                     InputReceived?.Invoke(this, EventArgs.Empty);
-                    break;
+                    return true;
+                case Keys.Tab:
+                    if (Keyboard.IsShiftHeldDown())
+                    {
+                        if (PreviousControl != null)
+                            WindowManager.SelectedControl = PreviousControl;
+                    }
+                    else if (NextControl != null)
+                    {
+                        WindowManager.SelectedControl = NextControl;
+                    }
+
+                    return true;
             }
+
+            return false;
         }
 
         private bool TextFitsBox()
@@ -375,30 +421,23 @@ namespace Rampastring.XNAUI.XNAControls
 
         public override void OnLeftClick()
         {
-            if (WindowManager.SelectedControl == this)
+            int x = GetCursorPoint().X;
+            int inputPosition = TextEndPosition;
+
+            StringBuilder text = new StringBuilder();
+
+            for (int i = TextStartPosition; i < TextEndPosition - TextStartPosition; i++)
             {
-                int x = GetCursorPoint().X;
-                int inputPosition = TextEndPosition;
-
-                StringBuilder text = new StringBuilder();
-
-                for (int i = TextStartPosition; i < TextEndPosition - TextStartPosition; i++)
+                text.Append(Text[i]);
+                if (Renderer.GetTextDimensions(text.ToString(), FontIndex).X +
+                    TEXT_HORIZONTAL_MARGIN > x)
                 {
-                    text.Append(Text[i]);
-                    if (Renderer.GetTextDimensions(text.ToString(), FontIndex).X + 
-                        TEXT_HORIZONTAL_MARGIN > x)
-                    {
-                        inputPosition = i - 1;
-                        break;
-                    }
+                    inputPosition = i;
+                    break;
                 }
+            }
 
-                InputPosition = Math.Max(0, inputPosition);
-            }
-            else
-            {
-                InputPosition = TextEndPosition;
-            }
+            InputPosition = Math.Max(0, inputPosition);
 
             barTimer = TimeSpan.Zero;
 
@@ -479,6 +518,8 @@ namespace Rampastring.XNAUI.XNAControls
 
                 if (TextEndPosition > text.Length || !TextFitsBox())
                     TextEndPosition--;
+
+                TextChanged?.Invoke(this, EventArgs.Empty);
             }
 
             InputReceived?.Invoke(this, EventArgs.Empty);
@@ -486,19 +527,6 @@ namespace Rampastring.XNAUI.XNAControls
 
         private void Backspace()
         {
-                    
-            KeyboardEventInput.imeActived = (base.WindowManager.IMEHandler.Composition.Length > 0) 
-                || (base.WindowManager.IMEHandler.CompositionRead.Length > 0
-                || (base.WindowManager.IMEHandler.CompositionClause.Length > 0));
-            if (KeyboardEventInput.imeActived)
-            {
-                return;
-            }
-            if (KeyboardEventInput.donotHandle)
-            {
-                KeyboardEventInput.donotHandle = false;
-                return;
-            }
             if (text.Length > 0 && InputPosition > 0)
             {
                 text = text.Remove(InputPosition - 1, 1);
@@ -508,6 +536,7 @@ namespace Rampastring.XNAUI.XNAControls
                     TextStartPosition--;
 
                 TextEndPosition--;
+                TextChanged?.Invoke(this, EventArgs.Empty);
             }
 
             InputReceived?.Invoke(this, EventArgs.Empty);

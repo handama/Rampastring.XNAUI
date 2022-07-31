@@ -14,7 +14,6 @@ using System.Diagnostics;
 using System.Linq;
 using Rampastring.XNAUI.PlatformSpecific;
 using System.Windows.Forms;
-using IMEHelper;
 
 namespace Rampastring.XNAUI
 {
@@ -24,6 +23,8 @@ namespace Rampastring.XNAUI
     /// </summary>
     public class WindowManager : DrawableGameComponent
     {
+        private const int XNA_MAX_TEXTURE_SIZE = 2048;
+
         /// <summary>
         /// Creates a new WindowManager.
         /// </summary>
@@ -115,13 +116,8 @@ namespace Rampastring.XNAUI
             }
         }
 
-        public IMEHandler IMEHandler
-        {
-            get
-            {
-                return this.imeHandler;
-            }
-        }
+        public bool IsInputExclusivelyCaptured => SelectedControl != null && SelectedControl.ExclusiveInputCapture;
+
         private GraphicsDeviceManager graphics;
 
         private IGameWindowManager gameWindowManager;
@@ -137,6 +133,11 @@ namespace Rampastring.XNAUI
         /// <param name="y">The height of the back buffer.</param>
         public void SetRenderResolution(int x, int y)
         {
+#if XNA
+            x = Math.Min(x, XNA_MAX_TEXTURE_SIZE);
+            y = Math.Min(y, XNA_MAX_TEXTURE_SIZE);
+#endif
+
             RenderResolutionX = x;
             RenderResolutionY = y;
 
@@ -187,9 +188,18 @@ namespace Rampastring.XNAUI
                 DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
 
             RenderTargetStack.Initialize(renderTarget, GraphicsDevice);
+            RenderTargetStack.InitDetachedScaledControlRenderTarget(RenderResolutionX, RenderResolutionY);
 
-            if (ScaleRatio > 1.5)
+            if (ScaleRatio > 1.5 && ScaleRatio % 1.0 == 0)
             {
+#if XNA
+                if (RenderResolutionX * 2 > XNA_MAX_TEXTURE_SIZE || RenderResolutionY * 2 > XNA_MAX_TEXTURE_SIZE)
+                {
+                    doubledRenderTarget = null;
+                    return;
+                }
+#endif
+
                 // Enable sharper scaling method
                 doubledRenderTarget = new RenderTarget2D(GraphicsDevice, 
                     RenderResolutionX * 2, RenderResolutionY * 2, false, SurfaceFormat.Color,
@@ -250,7 +260,6 @@ namespace Rampastring.XNAUI
 
             gameWindowManager = new WindowsGameWindowManager(Game);
             gameWindowManager.GameWindowClosing += GameWindowManager_GameWindowClosing;
-            this.imeHandler = new WinFormsIMEHandler(base.Game.Window.Handle, true);
 
             if (UISettings.ActiveSettings == null)
                 UISettings.ActiveSettings = new UISettings();
@@ -290,6 +299,7 @@ namespace Rampastring.XNAUI
             
             control.Initialize();
             Controls.Add(control);
+            ReorderControls();
         }
 
         /// <summary>
@@ -456,7 +466,7 @@ namespace Rampastring.XNAUI
         /// </summary>
         public void ReorderControls()
         {
-            Controls = Controls.OrderBy(control => control.UpdateOrder).ToList();
+            Controls = Controls.OrderBy(control => control.Detached).ThenBy(control => control.UpdateOrder).ToList();
         }
 
         /// <summary>
@@ -552,7 +562,7 @@ namespace Rampastring.XNAUI
 
                 if (HasFocus && control.InputEnabled && control.Enabled && 
                     (activeControl == null &&
-                    control.RenderRectangle().Contains(Cursor.Location)
+                    control.GetWindowRectangle().Contains(Cursor.Location)
                     ||
                     control.Focused))
                 {
@@ -564,18 +574,18 @@ namespace Rampastring.XNAUI
                     control.IsActive = false;
 
                 if (control.Enabled)
+                {
                     control.Update(gameTime);
+
+                    if (control.InputPassthrough && activeControl == control && !control.ChildHandledInput)
+                    {
+                        control.IsActive = false;
+                        activeControl = null;
+                        activeControlName = null;
+                    }
+                }
             }
-            KeyboardEventInput.donotHandle = (this.IMEHandler.Composition.Length > 0);
-            KeyboardEventInput.imeActived = (this.IMEHandler.Composition.Length > 0);
-            if (this.SelectedControl is XNATextBox)
-            {
-                this.IMEHandler.StartTextComposition();
-            }
-            else
-            {
-                this.IMEHandler.StopTextComposition();
-            }
+
             base.Update(gameTime);
         }
 
@@ -630,8 +640,12 @@ namespace Rampastring.XNAUI
 
             GraphicsDevice.Clear(Color.Black);
 
+            SamplerState scalingSamplerState = SamplerState.LinearClamp;
+            if (ScaleRatio % 1.0 == 0)
+                scalingSamplerState = SamplerState.PointClamp;
+
             Renderer.CurrentSettings = new SpriteBatchSettings(SpriteSortMode.Deferred,
-                    BlendState.NonPremultiplied, SamplerState.LinearClamp);
+                    BlendState.NonPremultiplied, scalingSamplerState);
             Renderer.BeginDraw();
 
             RenderTarget2D renderTargetToDraw = doubledRenderTarget != null ? doubledRenderTarget : renderTarget;
@@ -650,7 +664,5 @@ namespace Rampastring.XNAUI
 
             base.Draw(gameTime);
         }
-        // Token: 0x0400003E RID: 62
-        private IMEHandler imeHandler;
     }
 }

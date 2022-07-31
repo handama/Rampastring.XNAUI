@@ -1,5 +1,4 @@
 ﻿using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Rampastring.Tools;
@@ -33,6 +32,8 @@ namespace Rampastring.XNAUI.XNAControls
 
         public int FontIndex { get; set; }
 
+        public float TextShadowDistance { get; set; } = UISettings.ActiveSettings.TextShadowDistance;
+
         private bool _allowClick = true;
         public bool AllowClick
         {
@@ -40,7 +41,10 @@ namespace Rampastring.XNAUI.XNAControls
             set
             {
                 _allowClick = value;
-                animationMode = ButtonAnimationMode.RETURN;
+                if (_allowClick && cursorOnControl)
+                    AnimationMode = ButtonAnimationMode.HIGHLIGHT;
+                else
+                    AnimationMode = ButtonAnimationMode.RETURN;
             }
         }
 
@@ -98,42 +102,50 @@ namespace Rampastring.XNAUI.XNAControls
         /// </summary>
         private Color textColor = Color.White;
 
-        private ButtonAnimationMode animationMode;
+        private ButtonAnimationMode AnimationMode { get; set; }
+
+        private bool cursorOnControl = false;
 
         public override void OnMouseEnter()
         {
             base.OnMouseEnter();
 
-            if (!AllowClick || Cursor.LeftDown)
+            cursorOnControl = true;
+
+            if (Cursor.LeftDown)
+                return;
+
+            textColor = TextColorHover;
+
+            if (!AllowClick)
                 return;
 
             HoverSoundEffect?.Play();
 
             if (HoverTexture != null)
             {
-                animationMode = ButtonAnimationMode.HIGHLIGHT;
                 IdleTextureAlpha = 0.5f;
                 HoverTextureAlpha = 0.75f;
+                AnimationMode = ButtonAnimationMode.HIGHLIGHT;
             }
-
-            textColor = TextColorHover;
         }
 
         public override void OnMouseLeave()
         {
             base.OnMouseLeave();
 
+            cursorOnControl = false;
+            textColor = TextColorIdle;
+
             if (!AllowClick)
                 return;
 
             if (HoverTexture != null)
             {
-                animationMode = ButtonAnimationMode.RETURN;
                 IdleTextureAlpha = 0.75f;
                 HoverTextureAlpha = 0.5f;
+                AnimationMode = ButtonAnimationMode.RETURN;
             }
-
-            textColor = TextColorIdle;
         }
 
         public override void OnLeftClick()
@@ -221,14 +233,17 @@ namespace Rampastring.XNAUI.XNAControls
                         CalculateTextPosition();
                     return;
                 case "IdleTexture":
-                    IdleTexture = AssetLoader.LoadTexture(iniFile.GetStringValue(Name, "IdleTexture", String.Empty));
+                    IdleTexture = AssetLoader.LoadTexture(value);
                     ClientRectangle = new Rectangle(X, Y,
                         IdleTexture.Width, IdleTexture.Height);
                     if (AdaptiveText)
                         CalculateTextPosition();
                     return;
                 case "HoverTexture":
-                    HoverTexture = AssetLoader.LoadTexture(iniFile.GetStringValue(Name, "HoverTexture", String.Empty));
+                    HoverTexture = AssetLoader.LoadTexture(value);
+                    return;
+                case "TextShadowDistance":
+                    TextShadowDistance = Conversions.FloatFromString(value, TextShadowDistance);
                     return;
             }
 
@@ -258,7 +273,7 @@ namespace Rampastring.XNAUI.XNAControls
 
             float alphaRate = AlphaRate * (float)(gameTime.ElapsedGameTime.TotalMilliseconds / 10.0);
 
-            if (animationMode == ButtonAnimationMode.HIGHLIGHT)
+            if (AnimationMode == ButtonAnimationMode.HIGHLIGHT)
             {
                 IdleTextureAlpha -= alphaRate;
                 if (IdleTextureAlpha < 0.0f)
@@ -307,9 +322,9 @@ namespace Rampastring.XNAUI.XNAControls
             Vector2 textPosition = new Vector2(TextXPosition, TextYPosition);
 
             if (!Enabled || !AllowClick)
-                DrawStringWithShadow(_text, FontIndex, textPosition, TextColorDisabled);
+                DrawStringWithShadow(_text, FontIndex, textPosition, TextColorDisabled, 1.0f, TextShadowDistance);
             else
-                DrawStringWithShadow(_text, FontIndex, textPosition, textColor);
+                DrawStringWithShadow(_text, FontIndex, textPosition, textColor, 1.0f, TextShadowDistance);
 
             base.Draw(gameTime);
         }

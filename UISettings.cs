@@ -1,4 +1,4 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
 namespace Rampastring.XNAUI
@@ -12,6 +12,9 @@ namespace Rampastring.XNAUI
         /// The currently active UI settings.
         /// </summary>
         public static UISettings ActiveSettings { get; set; }
+
+        public float TextShadowDistance { get; set; } = 1.0f;
+        public Color TextShadowColor { get; set; } = Color.Black;
 
         public Color TextColor { get; set; } = new Color(196, 196, 196);
 
@@ -44,5 +47,7 @@ namespace Rampastring.XNAUI
         public float DefaultAlphaRate = 0.005f;
 
         public float CheckBoxAlphaRate = 0.05f;
+
+        public float IndicatorAlphaRate = 0.05f;
     }
 }

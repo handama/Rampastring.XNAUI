@@ -28,6 +28,7 @@ namespace Rampastring.XNAUI.XNAControls
         {
             DrawMode = ControlDrawMode.UNIQUE_RENDER_TARGET;
             ScrollBar = new XNAScrollBar(WindowManager);
+            ScrollBar.Name = "XNAListBoxScrollBar";
             ScrollBar.ScrollStep = LineHeight;
             ClientRectangleUpdated += XNAListBox_ClientRectangleUpdated;
         }
@@ -58,6 +59,9 @@ namespace Rampastring.XNAUI.XNAControls
         /// Returns the list of items in the list box.
         /// If you manipulate the list directly, call
         /// RefreshScrollbar afterwards.
+        /// !!! DO NOT remove items directly, use <see cref="Clear"/> or
+        /// one of the <see cref="RemoveItem(int)"/> overloads instead
+        /// or you risk leaking memory.
         /// TODO change to ObservableCollection?
         /// </summary>
         public List<XNAListBoxItem> Items = new List<XNAListBoxItem>();
@@ -222,6 +226,17 @@ namespace Rampastring.XNAUI.XNAControls
             }
         }
 
+        public XNAListBoxItem HoveredItem
+        {
+            get
+            {
+                if (HoveredIndex < 0 || HoveredIndex >= Items.Count)
+                    return null;
+
+                return Items[HoveredIndex];
+            }
+        }
+
         /// <summary>
         /// Returns the number of text lines that can fit on the list box at a time.
         /// </summary>
@@ -290,6 +305,15 @@ namespace Rampastring.XNAUI.XNAControls
                 case "DrawSelectionUnderScrollbar":
                     DrawSelectionUnderScrollbar = Conversions.BooleanFromString(value, true);
                     return;
+                case nameof(AllowMultiLineItems):
+                    AllowMultiLineItems = Conversions.BooleanFromString(value, AllowMultiLineItems);
+                    return;
+                case nameof(AllowRightClickUnselect):
+                    AllowRightClickUnselect = Conversions.BooleanFromString(value, AllowRightClickUnselect);
+                    return;
+                case nameof(FontIndex):
+                    FontIndex = Conversions.IntFromString(value, FontIndex);
+                    return;
             }
 
             base.ParseAttributeFromINI(iniFile, key, value);
@@ -297,12 +321,7 @@ namespace Rampastring.XNAUI.XNAControls
 
         public void Clear()
         {
-            //foreach (DXListBoxItem item in Items)
-            //{
-            //    if (item.Texture != null)
-            //        item.Texture.Dispose();
-            //}
-
+            Items.ForEach(item => item.TextChanged -= ListBoxItem_TextChanged);
             Items.Clear();
             RefreshScrollbar();
         }
@@ -353,6 +372,19 @@ namespace Rampastring.XNAUI.XNAControls
         /// <param name="listBoxItem">The item to add.</param>
         public void AddItem(XNAListBoxItem listBoxItem)
         {
+            CheckItemTextForWordWrapAndExcessSize(listBoxItem);
+
+            Items.Add(listBoxItem);
+            RefreshScrollbar();
+
+            listBoxItem.TextChanged += ListBoxItem_TextChanged;
+        }
+
+        private void ListBoxItem_TextChanged(object sender, EventArgs e) => 
+            CheckItemTextForWordWrapAndExcessSize((XNAListBoxItem)sender);
+
+        private void CheckItemTextForWordWrapAndExcessSize(XNAListBoxItem listBoxItem)
+        {
             int width = Width - TextBorderDistance * 2;
             if (EnableScrollbar)
             {
@@ -364,10 +396,9 @@ namespace Rampastring.XNAUI.XNAControls
                 int textureHeight = listBoxItem.Texture.Height;
                 int textureWidth = listBoxItem.Texture.Width;
 
-                if (listBoxItem.Texture.Height > LineHeight)
+                if (textureHeight > LineHeight)
                 {
                     double scaleRatio = textureHeight / (double)LineHeight;
-                    textureHeight = LineHeight;
                     textureWidth = (int)(textureWidth / scaleRatio);
                 }
 
@@ -393,9 +424,51 @@ namespace Rampastring.XNAUI.XNAControls
                     listBoxItem.TextXPadding = (width - (int)textSize.X) / 2;
                 }
             }
+        }
 
-            Items.Add(listBoxItem);
-            RefreshScrollbar();
+        /// <summary>
+        /// Removes the item at the specified index of the list box.
+        /// </summary>
+        /// <param name="index">The zero-based index of the item to remove.</param>
+        public void RemoveItem(int index)
+        {
+            var item = Items[index];
+            item.TextChanged -= ListBoxItem_TextChanged;
+            Items.RemoveAt(index);
+        }
+
+        /// <summary>
+        /// Removes the first item of the list box that fills the given condition.
+        /// Returns a bool that tells whether an item filling the condition
+        /// was found (and removed) from the list.
+        /// </summary>
+        public bool RemoveItem(Predicate<XNAListBoxItem> condition)
+        {
+            int index = Items.FindIndex(condition);
+            if (index > -1)
+            {
+                RemoveItem(index);
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Removes the given item at the specified index of the list box.
+        /// Returns a bool that tells whether the item was found (and removed)
+        /// from the list.
+        /// </summary>
+        public bool RemoveItem(XNAListBoxItem item)
+        {
+            int index = Items.IndexOf(item);
+            if (index > -1)
+            {
+                RemoveItem(index);
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -615,6 +688,12 @@ namespace Rampastring.XNAUI.XNAControls
         /// </summary>
         private void ScrollUp()
         {
+            if (SelectedIndex >= Items.Count)
+            {
+                SelectedIndex = Items.Count - 1;
+                return;
+            }
+
             for (int i = SelectedIndex - 1; i > -1; i--)
             {
                 if (Items[i].Selectable)
@@ -685,11 +764,11 @@ namespace Rampastring.XNAUI.XNAControls
         /// <summary>
         /// Updates the hovered item index while the cursor is on this control.
         /// </summary>
-        public override void OnMouseOnControl(MouseEventArgs eventArgs)
+        public override void OnMouseOnControl()
         {
-            base.OnMouseOnControl(eventArgs);
+            base.OnMouseOnControl();
 
-            int itemIndex = GetItemIndexOnCursor(eventArgs.RelativeLocation);
+            int itemIndex = GetItemIndexOnCursor(GetCursorPoint());
             HoveredIndex = itemIndex;
         }
 
@@ -812,6 +891,62 @@ namespace Rampastring.XNAUI.XNAControls
             return new ListBoxItemDrawInfo(Items.Count, 0);
         }
 
+        protected virtual void DrawListBoxItem(int index, int y)
+        {
+            XNAListBoxItem lbItem = Items[index];
+
+            int x = TextBorderDistance;
+
+            if (index == SelectedIndex)
+            {
+                int drawnWidth;
+
+                if (DrawSelectionUnderScrollbar || !ScrollBar.IsDrawn() || !EnableScrollbar)
+                {
+                    drawnWidth = Width - 2;
+                }
+                else
+                {
+                    drawnWidth = Width - 2 - ScrollBar.Width;
+                }
+
+                FillRectangle(new Rectangle(1, y, drawnWidth,
+                    lbItem.TextLines.Count * LineHeight),
+                    FocusColor);
+            }
+
+            if (lbItem.Texture != null)
+            {
+                int textureHeight = lbItem.Texture.Height;
+                int textureWidth = lbItem.Texture.Width;
+                int textureYPosition = 0;
+
+                if (lbItem.Texture.Height > LineHeight)
+                {
+                    double scaleRatio = textureHeight / (double)LineHeight;
+                    textureHeight = LineHeight;
+                    textureWidth = (int)(textureWidth / scaleRatio);
+                }
+                else
+                    textureYPosition = (LineHeight - textureHeight) / 2;
+
+                DrawTexture(lbItem.Texture,
+                    new Rectangle(x, y + textureYPosition,
+                    textureWidth, textureHeight), Color.White);
+
+                x += textureWidth + ITEM_TEXT_TEXTURE_MARGIN;
+            }
+
+            x += lbItem.TextXPadding;
+
+            for (int j = 0; j < lbItem.TextLines.Count; j++)
+            {
+                DrawStringWithShadow(lbItem.TextLines[j], FontIndex,
+                    new Vector2(x, y + j * LineHeight + lbItem.TextYPadding),
+                    lbItem.TextColor);
+            }
+        }
+
         /// <summary>
         /// Draws the list box and its items.
         /// </summary>
@@ -827,61 +962,12 @@ namespace Rampastring.XNAUI.XNAControls
             { 
                 XNAListBoxItem lbItem = Items[i];
 
-                if (height > Height)
-                    break;
-
-                int x = TextBorderDistance;
-
-                if (i == SelectedIndex)
-                {
-                    int drawnWidth;
-
-                    if (DrawSelectionUnderScrollbar || !ScrollBar.IsDrawn() || !EnableScrollbar)
-                    {
-                        drawnWidth = Width - 2;
-                    }
-                    else
-                    {
-                        drawnWidth = Width - 2 - ScrollBar.Width;
-                    }
-
-                    FillRectangle(new Rectangle(1, height, drawnWidth,
-                        lbItem.TextLines.Count * LineHeight),
-                        FocusColor);
-                }
-
-                if (lbItem.Texture != null)
-                {
-                    int textureHeight = lbItem.Texture.Height;
-                    int textureWidth = lbItem.Texture.Width;
-                    int textureYPosition = 0;
-
-                    if (lbItem.Texture.Height > LineHeight)
-                    {
-                        double scaleRatio = textureHeight / (double)LineHeight;
-                        textureHeight = LineHeight;
-                        textureWidth = (int)(textureWidth / scaleRatio);
-                    }
-                    else
-                        textureYPosition = (LineHeight - textureHeight) / 2;
-
-                    DrawTexture(lbItem.Texture,
-                        new Rectangle(x, height + textureYPosition, 
-                        textureWidth, textureHeight), Color.White);
-
-                    x += textureWidth + ITEM_TEXT_TEXTURE_MARGIN;
-                }
-
-                x += lbItem.TextXPadding;
-
-                for (int j = 0; j < lbItem.TextLines.Count; j++)
-                {
-                    DrawStringWithShadow(lbItem.TextLines[j], FontIndex, 
-                        new Vector2(x, height + j * LineHeight + lbItem.TextYPadding),
-                        lbItem.TextColor);
-                }
+                DrawListBoxItem(i, height);
 
                 height += lbItem.TextLines.Count * LineHeight;
+
+                if (height > Height)
+                    break;
             }
 
             if (DrawBorders)

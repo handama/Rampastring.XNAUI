@@ -51,6 +51,9 @@ namespace Rampastring.XNAUI.XNAControls
 
             if (ButtonTexture == null)
                 ButtonTexture = AssetLoader.LoadTexture("trackbarButton.png");
+
+            if (Height == 0)
+                Height = ButtonTexture.Height;
         }
 
         public override void ParseAttributeFromINI(IniFile iniFile, string key, string value)
@@ -78,13 +81,15 @@ namespace Rampastring.XNAUI.XNAControls
         /// Scrolls the scrollbar if the user presses the mouse left button
         /// while moving the cursor over the scrollbar.
         /// </summary>
-        public override void OnMouseOnControl(MouseEventArgs e)
+        public override void OnMouseOnControl()
         {
-            base.OnMouseOnControl(e);
+            base.OnMouseOnControl();
 
             if (Cursor.LeftPressedDown)
             {
                 isHeldDown = true;
+                // It's fair to assume that dragged trackbars are selected
+                WindowManager.SelectedControl = this;
             }
         }
 
