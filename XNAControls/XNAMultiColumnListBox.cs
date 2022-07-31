@@ -182,22 +182,9 @@ namespace Rampastring.XNAUI.XNAControls
         {
             switch (key)
             {
-                case nameof(DrawSelectionUnderScrollbar):
+                case "DrawSelectionUnderScrollbar":
                     DrawSelectionUnderScrollbar = Conversions.BooleanFromString(value, true);
                     return;
-                case nameof(FontIndex):
-                    FontIndex = Conversions.IntFromString(value, FontIndex);
-                    return;
-            }
-
-            const string columnWidthKeyStart = "ColumnWidth";
-            if (key.StartsWith(columnWidthKeyStart))
-            {
-                int headerIndex = Conversions.IntFromString(key.Substring(columnWidthKeyStart.Length), -1);
-                if (headerIndex == -1 || headerIndex >= headers.Count)
-                    return;
-
-                ChangeColumnWidth(headerIndex, Conversions.IntFromString(value, headers[headerIndex].Width));
             }
 
             if (key.StartsWith("Column"))
@@ -212,22 +199,14 @@ namespace Rampastring.XNAUI.XNAControls
                 AddColumn(parts[0], width);
             }
 
-            // Usage: ListBoxYAttribute:<AttrName>=<value>
-            // Allows setting list box attributes
-            if (key.StartsWith("ListBox") && key.Length > "ListBoxYAttribute:".Length)
+            const string columnWidthKeyStart = "ColumnWidth";
+            if (key.StartsWith(columnWidthKeyStart))
             {
-                int listBoxId = Conversions.IntFromString(key.Substring("ListBox".Length, 1), -1);
-                if (listBoxId == -1)
+                int headerIndex = Conversions.IntFromString(key.Substring(columnWidthKeyStart.Length), -1);
+                if (headerIndex == -1 || headerIndex >= headers.Count)
                     return;
 
-                if (listBoxId >= listBoxes.Count)
-                    return;
-
-                if (key.Substring("ListBoxY".Length, ":Attribute".Length) != ":Attribute")
-                    return;
-
-                string attrName = key.Substring("ListBoxYAttribute:".Length);
-                listBoxes[listBoxId].ParseAttributeFromINI(iniFile, attrName, value);
+                ChangeColumnWidth(headerIndex, Conversions.IntFromString(value, headers[headerIndex].Width));
             }
 
             base.ParseAttributeFromINI(iniFile, key, value);

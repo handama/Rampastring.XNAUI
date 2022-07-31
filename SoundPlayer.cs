@@ -48,7 +48,9 @@ namespace Rampastring.XNAUI
             if (soundList == null)
                 return;
 
+#if !LINUX
             Play(Volume, sound);
+#endif
         }
 
         /// <summary>
@@ -58,7 +60,9 @@ namespace Rampastring.XNAUI
         /// <param name="sound">The sound to play.</param>
         public static void PlayWithVolume(float volume, EnhancedSoundEffect sound)
         {
+#if !LINUX
             Play(volume, sound);
+#endif
         }
 
         private static void Play(float volume, EnhancedSoundEffect sound)

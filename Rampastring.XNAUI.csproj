@@ -47,7 +47,6 @@
     <WarningLevel>4</WarningLevel>
     <DocumentationFile>bin\Windows\Release\Rampastring.XNAUI.XML</DocumentationFile>
     <NoWarn>1591</NoWarn>
-    <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|WindowsGL' ">
     <DebugSymbols>true</DebugSymbols>
@@ -66,7 +65,6 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <DocumentationFile>bin\WindowsGL\Release\Rampastring.XNAUI.XML</DocumentationFile>
-    <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|XNAFramework' ">
     <DebugSymbols>true</DebugSymbols>
@@ -87,7 +85,6 @@
     <WarningLevel>4</WarningLevel>
     <DocumentationFile>bin\XNAFramework\Release\Rampastring.XNAUI.XML</DocumentationFile>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <Choose>
     <When Condition="'$(Platform)' != 'XNAFramework'">
@@ -132,7 +129,10 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
-    <Reference Include="Rampastring.Tools, Version=1.1.7568.40208, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="IMEHelper.Window">
+      <HintPath>..\References\IMEHelper.Window.dll</HintPath>
+    </Reference>
+    <Reference Include="Rampastring.Tools, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>References\Rampastring.Tools.dll</HintPath>
     </Reference>
@@ -153,12 +153,10 @@
     <Compile Include="EnhancedSoundEffect.cs" />
     <Compile Include="PlatformSpecific\IGameWindowManager.cs" />
     <Compile Include="PlatformSpecific\WindowsGameWindowManager.cs" />
-    <Compile Include="RenderTargetPool.cs" />
     <Compile Include="RenderTargetStack.cs" />
     <Compile Include="RMath.cs" />
     <Compile Include="SoundPlayer.cs" />
     <Compile Include="XNAControls\ControlDrawMode.cs" />
-    <Compile Include="XNAControls\XNAIndicator.cs" />
     <Compile Include="XNAControls\XNALinkLabel.cs" />
     <Compile Include="XNAControls\XNAListBoxItem.cs" />
     <Compile Include="XNAControls\XNAPasswordBox.cs" />

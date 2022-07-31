@@ -330,7 +330,7 @@ namespace Rampastring.XNAUI.XNAControls
             if (!OpenUp)
             {
                 DropDownState = DropDownState.OPENED_DOWN;
-                Height = DropDownTexture.Height + 2 + ItemHeight * Items.Count;
+                Height = DropDownTexture.Height + 1 + ItemHeight * Items.Count;
             }
             else
             {
@@ -373,7 +373,7 @@ namespace Rampastring.XNAUI.XNAControls
             CloseDropDown();
         }
 
-        protected virtual void CloseDropDown()
+        private void CloseDropDown()
         {
             if (DropDownState == DropDownState.OPENED_UP)
             {
@@ -503,7 +503,7 @@ namespace Rampastring.XNAUI.XNAControls
                     Rectangle listRectangle;
 
                     if (DropDownState == DropDownState.OPENED_DOWN)
-                        listRectangle = new Rectangle(0, DropDownTexture.Height, Width, Height - DropDownTexture.Height);
+                        listRectangle = new Rectangle(0, DropDownTexture.Height, Width, Height + 1 - DropDownTexture.Height);
                     else
                         listRectangle = new Rectangle(0, 0, Width, Height - DropDownTexture.Height);
 

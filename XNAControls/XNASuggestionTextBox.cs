@@ -1,5 +1,4 @@
 ﻿using Microsoft.Xna.Framework;
-using Rampastring.Tools;
 
 namespace Rampastring.XNAUI.XNAControls
 {
@@ -27,16 +26,6 @@ namespace Rampastring.XNAUI.XNAControls
             base.Initialize();
 
             Text = Suggestion ?? string.Empty;
-        }
-
-        public override void ParseAttributeFromINI(IniFile iniFile, string key, string value)
-        {
-            if (key == "Suggestion")
-            {
-                Suggestion = value;
-            }
-
-            base.ParseAttributeFromINI(iniFile, key, value);
         }
 
         public override Color TextColor

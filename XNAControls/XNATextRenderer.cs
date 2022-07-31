@@ -10,22 +10,19 @@ namespace Rampastring.XNAUI.XNAControls
     /// <summary>
     /// A part of a potentially long line of text.
     /// </summary>
-    public struct XNATextPart
+    public class XNATextPart
     {
-        public XNATextPart(string text, int fontIndex, float scale, Color? color, bool underlined)
+        public XNATextPart() { }
+
+        public XNATextPart(string text, int fontIndex = 0, float scale = 1.0f, Color? color = null, bool underlined = false)
         {
             _text = text;
             _fontIndex = fontIndex;
             _scale = scale;
             _color = color;
             Underlined = underlined;
-            Size = Point.Zero;
             UpdateSize();
         }
-
-        public XNATextPart(string text) : this(text, 0, 1.0f, null, false) { }
-
-        public XNATextPart(string text, int fontIndex, Color? color) : this(text, fontIndex, 1.0f, color, false) { }
 
         private string _text;
 
@@ -43,7 +40,7 @@ namespace Rampastring.XNAUI.XNAControls
             set { _fontIndex = value; UpdateSize(); }
         }
 
-        private float _scale;
+        private float _scale = 1.0f;
 
         public float Scale
         {
@@ -122,8 +119,8 @@ namespace Rampastring.XNAUI.XNAControls
     }
 
     /// <summary>
-    /// A text renderer, practically an enhanced label control.
-    /// Takes <see cref="XNATextPart"/>s, automatically formats them, applies line
+    /// A text renderer.
+    /// Takes <see cref="XNATextPart"/>s, automatically formats them, applied line
     /// breaks if necessary and renders them.
     /// </summary>
     public class XNATextRenderer : XNAControl
@@ -133,7 +130,6 @@ namespace Rampastring.XNAUI.XNAControls
         }
 
         public int Padding { get; set; } = 3;
-        public int SpaceBetweenLines { get; set; } = 0;
 
         private List<XNATextPart> originalTextParts = new List<XNATextPart>();
 
@@ -144,21 +140,11 @@ namespace Rampastring.XNAUI.XNAControls
             originalTextParts.Add(text);
         }
 
-        public void AddTextLine(XNATextPart text)
+        protected override void OnClientRectangleUpdated()
         {
-            originalTextParts.Add(new XNATextPart(Environment.NewLine + text.Text,
-                text.FontIndex, text.Scale, text.Color, text.Underlined));
+            PrepareTextParts();
+            base.OnClientRectangleUpdated();
         }
-
-        public void ClearTextParts()
-        {
-            originalTextParts.Clear();
-            renderedTextLines.Clear();
-        }
-
-        public int GetTextPartCount() => originalTextParts.Count;
-
-        public XNATextPart GetTextPart(int index) => originalTextParts[index];
 
         public void PrepareTextParts()
         {
@@ -167,67 +153,30 @@ namespace Rampastring.XNAUI.XNAControls
             XNATextLine line = new XNATextLine(new List<XNATextPart>());
             renderedTextLines.Add(line);
 
-            int remainingWidth = Width - (Padding * 2);
-
             foreach (XNATextPart textPart in originalTextParts)
             {
                 string remainingText = textPart.Text;
-                XNATextPart currentOutputPart = new XNATextPart("", textPart.FontIndex, textPart.Scale, textPart.Color, textPart.Underlined);
 
                 while (true)
                 {
-                    if (remainingText.StartsWith(Environment.NewLine))
+                    line = renderedTextLines[renderedTextLines.Count - 1];
+                    int remainingWidth = (Width - Padding * 2) - line.Width;
+
+                    List<string> textLines = Renderer.GetFixedTextLines(remainingText, textPart.FontIndex, remainingWidth, false);
+                    if (Renderer.GetTextDimensions(textLines[0], textPart.FontIndex).X < remainingWidth)
                     {
-                        string newLineText = "";
-                        if (remainingText.Substring(Environment.NewLine.Length).StartsWith(Environment.NewLine))
-                            newLineText = " ";
-                        line = new XNATextLine(new List<XNATextPart>() { new XNATextPart(newLineText, textPart.FontIndex, textPart.Scale, textPart.Color, textPart.Underlined) });
-                        renderedTextLines.Add(line);
-                        remainingText = remainingText.Substring(Environment.NewLine.Length);
-                        remainingWidth = Width - (Padding * 2);
-                        currentOutputPart = new XNATextPart("", textPart.FontIndex, textPart.Scale, textPart.Color, textPart.Underlined);
-                        continue;
+                        line.AddPart(new XNATextPart(textLines[0], textPart.FontIndex, textPart.Scale, textPart.Color, textPart.Underlined));
+                        remainingText = textPart.Text.Substring(textLines[0].Length - 1);
                     }
 
-                    var words = remainingText.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                    foreach (string word in words)
-                    {
-                        string wordWithSpace = word + " ";
-                        int wordWidth = (int)Renderer.GetTextDimensions(word, textPart.FontIndex).X;
-                        int wordWidthWithSpace = (int)Renderer.GetTextDimensions(wordWithSpace, textPart.FontIndex).X;
-                        if (wordWidth < remainingWidth)
-                        {
-                            remainingWidth -= wordWidthWithSpace;
-                            currentOutputPart.Text += wordWithSpace;
-                        }
-                        else
-                        {
-                            line.Parts.Add(currentOutputPart);
+                    remainingText = remainingText.TrimStart(' ');
 
-                            remainingWidth = Width - (Padding * 2) - wordWidthWithSpace;
-                            currentOutputPart = new XNATextPart(wordWithSpace, textPart.FontIndex, textPart.Scale, textPart.Color, textPart.Underlined);
-                            line = new XNATextLine(new List<XNATextPart>());
-                            renderedTextLines.Add(line);
-                        }
-                    }
-
-                    line.Parts.Add(currentOutputPart);
-                    break;
+                    if (textLines.Count > 1 || remainingText != "")
+                        renderedTextLines.Add(new XNATextLine(new List<XNATextPart>()));
+                    else
+                        break;
                 }
-
             }
-
-            ClientRectangleUpdated -= XNATextRenderer_ClientRectangleUpdated;
-            Height = renderedTextLines.Sum(l => l.Height);
-            if (renderedTextLines.Count > 1)
-                Height += (renderedTextLines.Count - 1) * SpaceBetweenLines;
-
-            ClientRectangleUpdated += XNATextRenderer_ClientRectangleUpdated;
-        }
-
-        private void XNATextRenderer_ClientRectangleUpdated(object sender, EventArgs e)
-        {
-            PrepareTextParts();
         }
 
         public override void Draw(GameTime gameTime)
@@ -244,7 +193,7 @@ namespace Rampastring.XNAUI.XNAControls
                     x += part.Width + 1;
                 }
 
-                y += line.Height + SpaceBetweenLines;
+                y += line.Height;
             }
 
             base.Draw(gameTime);
